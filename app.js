@@ -1,6 +1,9 @@
 const express = require('express');
 const morgan = require('morgan');
 
+const AppError = require('./utils/appError');
+const globalErrorHandler = require('./utils/errorController');
+
 const tourRouter = require('./routes/tourRoutes');
 const userRouter = require('./routes/userRoutes');
 
@@ -18,17 +21,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// 3. Маршрути
-
 app.use('/api/v1/tours', tourRouter);
 app.use('/api/v1/users', userRouter);
 
 // обробник для всіх маршрутів, які не кешуються нашими маршрутизаторами
 app.all('*', (req, res, next) => {
-  res.status(404).json({
-    status: 'fail',
-    message: `Неможливо знайти ${req.originalUrl} на цьому сервері`,
-  });
+  next(
+    new AppError(`Неможливо знайти ${req.originalUrl} на цьому сервері!`, 404),
+  );
 });
+
+// обробка всіх операційних помилок, які можуть виникнути
+app.use(globalErrorHandler);
 
 module.exports = app;
