@@ -29,8 +29,10 @@ exports.getTourStats = catchAsync(async (req, res, next) => {
       $group: {
         // оскільки в id  вказали $difficulty, то нам розбило статистику по групам складності (таким чином можна розбивати на групи)
         _id: { $toUpper: '$difficulty' },
-        numTours: { $sum: 1 }, //для кожного документа, який проходитиме через конвеєр, буде додаватись 1, так ми порахуємо загальну кількість турів (документів)
+        //для кожного документа, який проходитиме через конвеєр, буде додаватись 1, щоб бачити загальну кількість турів
+        numTours: { $sum: 1 },
         numRatings: { $sum: '$ratingsQuantity' },
+        // оператор $avg повертає середнє значення
         avgRating: { $avg: '$ratingsAverage' },
         avgPrice: { $avg: '$price' },
         minPrice: { $min: '$price' },
