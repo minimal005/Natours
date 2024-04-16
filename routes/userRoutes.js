@@ -11,17 +11,19 @@ router.post('/login', authController.login);
 router.post('/forgotPassword', authController.forgotPassword);
 router.patch('/resetPassword/:token', authController.resetPassword);
 
+// Після цього проміжного ПЗ ми робимо обов'язковим авторизацію (щоб не повторювався код в кожному рядку,
+// ми виносимо його в окремий ПЗ)
+router.use(authController.protect);
+
 // якщо ти авторизований і хочеш змінити пароль
-router.patch(
-  '/updateMyPassword',
-  authController.protect,
-  authController.updatePassword,
-);
+router.patch('/updateMyPassword', authController.updatePassword);
+router.get('/me', userController.getMe, userController.getUser);
+router.patch('/updateMe', userController.updateMe);
+router.delete('/deleteMe', userController.deleteMe);
 
-router.patch('/updateMe', authController.protect, userController.updateMe);
-router.delete('/deleteMe', authController.protect, userController.deleteMe);
+// подальші шляхи для системного адміністратора, який може видаляти, створювати користувачів
+router.use(authController.restrictTo('admin'));
 
-// шляхи більше для системного адміністратора, який може видаляти, створювати користувачів
 router
   .route('/')
   .get(userController.getAllUsers)

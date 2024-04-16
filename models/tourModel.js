@@ -43,6 +43,7 @@ const tourSchema = new mongoose.Schema(
       default: 4.5,
       min: [1, 'Rating must be above 1.0'],
       max: [5, 'Rating must be below 5.0'],
+      set: (val) => Math.round(val * 10) / 10, // 4.666666, 46.6666, 47, 4.7
     },
     ratingsQuantity: {
       type: Number,
@@ -60,7 +61,7 @@ const tourSchema = new mongoose.Schema(
         validator: function (val) {
           return val < this.price;
         },
-        message: 'Discount price {VALUE} should be below regular price',
+        message: 'Discount price ({VALUE}) should be below regular price',
       },
     },
     summary: {
@@ -77,7 +78,7 @@ const tourSchema = new mongoose.Schema(
       required: [true, 'A tour must have a cover image'],
     },
     images: [String],
-    createAt: {
+    createdAt: {
       type: Date,
       default: Date.now(),
       select: false,
@@ -87,6 +88,39 @@ const tourSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // початок локацій можна видалити і встановити все в локаціях
+    startLocation: {
+      // GeoJSON from MongoDB
+      type: {
+        type: String,
+        default: 'Point',
+        enum: ['Point'],
+      },
+      coordinates: [Number],
+      address: String,
+      description: String,
+    },
+    locations: [
+      {
+        type: {
+          type: String,
+          default: 'Point',
+          enum: ['Point'],
+        },
+        coordinates: [Number],
+        address: String,
+        description: String,
+        day: Number,
+      },
+    ],
+    guides: [
+      // поряд з таким заповненням використовуємо метод .populate для розкриття інфо про об'єкт в .pre
+      // (під моделлю прописано)
+      {
+        type: mongoose.Schema.ObjectId,
+        ref: 'User',
+      },
+    ],
   },
   {
     //кожного разу, коли дані фактично виводяться у вигляді JSON, віртуальні об'єкти будуть частиною вихідних даних
@@ -96,28 +130,47 @@ const tourSchema = new mongoose.Schema(
   },
 );
 
+// tourSchema.index({ price: 1 }) або price: -1 сортування за зростанням або спаданням
+//  потрібно ретельно вивчити шаблони доступу до нашого додатку, щоб з'ясувати, які поля запитуються найчастіше,
+// а потім встановити індекси для цих полів
+// кожен індекс використовує ресурси, тому потрібно встановлювати тільки по потребі
+tourSchema.index({ price: 1, ratingsAverage: -1 });
+tourSchema.index({ slug: 1 });
+tourSchema.index({ startLocation: '2dsphere' });
+
 // створюємо віртуальні поля / оск.немає потреби дублювати тривалість в тижнях
 tourSchema.virtual('durationWeeks').get(function () {
   return this.duration / 7;
 });
 
-// DOCUMENT MIDDLEWARE Проміжне програмне забезпечення - запускається перед реальною подією, тобто перед .save() і .create() (крім команди .insertMany()) і крім update (оновлення)
+// Virtual populate. Ми можемо отримати доступ до всіх відгуків про певний тур, але не зберігаючи цей масив
+// ідентифікаторів у турі.
+// щоб не перегружати модель зайвою вагою, оскільки тур - батьківський елемент над review і ми вирішили у
+// відгуках давати посилання, а не навпаки,
+// тому робимо Virtual populate, щоб мати можливість переглянути відгуки у турі
+// після цього прописати в tourController в getTour метод populate, щоб показувались відгуки
+tourSchema.virtual('reviews', {
+  ref: 'Review',
+  foreignField: 'tour',
+  localField: '_id',
+});
+
+// DOCUMENT MIDDLEWARE Проміжне програмне забезпечення - запускається перед реальною подією, тобто перед .save()
+// і .create() (крім команди .insertMany()) і крім update (оновлення)
 // this  вказує на поточний документ
 tourSchema.pre('save', function (next) {
   // функція запускатиметься перед збереженням в DB - не відображається в DB
   this.slug = slugify(this.name, { lower: true });
   next();
 });
-/*tourSchema.pre('save', function (next) {
-  console.log('Will save document...');
-  next();
-});
 
-tourSchema.post('save', function (doc, next) {
-  // функція має доступ не тільки до наступного, але й до документа, який щойно був збережений в DB
-  console.log(doc);
-  next();
-});*/
+// якщо ми хочемо реалізувати, щоб в Tour вбудовувалась вся інформація про юзерів-гідів, а не їх посилання
+// тоді в моделі прописуємо guides: Array  і наступний код
+// tourSchema.pre('save', async function(next) {
+//   const guidesPromises = this.guides.map(async id => await User.findById(id));
+//   this.guides = await Promise.all(guidesPromises);
+//   next();
+// });
 
 // QUERY MIDDLEWARE
 // this  вказує на поточний запит
@@ -135,6 +188,22 @@ tourSchema.pre(/^find/, function (next) {
   console.log(`Пройшло часу ${Date.now - this.start} мілісекунд`);
   next();
 });*/
+
+// метод .populate - метод mongoose - МОЖЕ ВПЛИНУТИ НА ЕФЕКТИВНІСТЬ, ЯКЩО ВЕЛИКИЙ ДОДАТОК
+// метод .populate('guides') розкриє всю інформацію про цей гідів при отриманні туру, а не в самій DB
+//.populate({path: 'guides', select: '-__v -passwordChangedAt}) - метод розкриє інфо про гідів, але вилучить
+// інфо про __v і про дату зміну пароля
+//  без цього методу ми отримаємо тільки ідентифікатори гідів
+// Можемо окремо прописати цей метод в tourController без .pre, якщо хочему, щоб вся інфа виводилась
+// тільки в окремих випадках
+tourSchema.pre(/^find/, function (next) {
+  this.populate({
+    path: 'guides',
+    select: '-__v -passwordChangedAt',
+  });
+
+  next();
+});
 
 // AGGREGATION MIDDLEWARE
 tourSchema.pre('aggregate', function (next) {

@@ -8,7 +8,11 @@ class APIfeatures {
     const excludedFields = ['page', 'limit', 'sort', 'fields'];
     excludedFields.forEach((el) => delete queryObj[el]);
 
-    this.query = this.query.find(queryObj);
+    // 1B) Advanced filtering добавляємо знак $ в пошуковий рядок
+    let queryStr = JSON.stringify(queryObj);
+    queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, (match) => `$${match}`);
+
+    this.query = this.query.find(JSON.parse(queryStr));
     return this;
   }
   sort() {
