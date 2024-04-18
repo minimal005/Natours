@@ -137,6 +137,8 @@ const tourSchema = new mongoose.Schema(
 // кожен індекс використовує ресурси, тому потрібно встановлювати тільки по потребі
 tourSchema.index({ price: 1, ratingsAverage: -1 });
 tourSchema.index({ slug: 1 });
+// індекс для геолокаційних даних, щоб ми для пошуку турів з вказанням дистанцій
+// використовується індекс 2D-сфери.
 tourSchema.index({ startLocation: '2dsphere' });
 
 // створюємо віртуальні поля / оск.немає потреби дублювати тривалість в тижнях
@@ -207,13 +209,13 @@ tourSchema.pre(/^find/, function (next) {
 });
 
 // AGGREGATION MIDDLEWARE
-tourSchema.pre('aggregate', function (next) {
-  // видаляємо на початковому етапі секретні тури (true) з загального обляду
-  //  добавляємо в ППЗ, оскільки у нас може бути декілька різних агрегацій і щоб спрацювало в кожній
-  // .pipeline() - це масив агрегації, наш метод добавляємо в початок масиву
-  this.pipeline().unshift({ $match: { secretTour: { $ne: true } } });
-  next();
-});
+// tourSchema.pre('aggregate', function (next) {
+//   // видаляємо на початковому етапі секретні тури (true) з загального обляду
+//   //  добавляємо в ППЗ, оскільки у нас може бути декілька різних агрегацій і щоб спрацювало в кожній
+//   // .pipeline() - це масив агрегації, наш метод добавляємо в початок масиву
+//   this.pipeline().unshift({ $match: { secretTour: { $ne: true } } });
+//   next();
+// });
 const Tour = mongoose.model('Tour', tourSchema);
 
 module.exports = Tour;

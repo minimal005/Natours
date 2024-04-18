@@ -108,12 +108,16 @@ exports.getMonthlyPlan = catchAsync(async (req, res, next) => {
   });
 });
 
+// тур межах певної відстані від дому, center - це точка, де ви проживаєте
+// unit,    :unit - одиниця виміру
 // /tours-within/:distance/center/:latlng/unit/:unit
 // /tours-within/233/center/34.111745,-118.113491/unit/mi
 exports.getToursWithin = catchAsync(async (req, res, next) => {
   const { distance, latlng, unit } = req.params;
   const [lat, lng] = latlng.split(',');
 
+  // щоб отримати радіани, ділиться відстань на радіус землі
+  // тобто коли відстань в милях, то / 3963.2, а якщо в км, то / 6378.1
   const radius = unit === 'mi' ? distance / 3963.2 : distance / 6378.1;
 
   if (!lat || !lng) {
@@ -124,8 +128,9 @@ exports.getToursWithin = catchAsync(async (req, res, next) => {
       ),
     );
   }
-
   const tours = await Tour.find({
+    // $geoWithin знаходить документи в межах певної відстані.
+    // радіус приймається тільки в радіанах
     startLocation: { $geoWithin: { $centerSphere: [[lng, lat], radius] } },
   });
 
@@ -142,6 +147,7 @@ exports.getDistances = catchAsync(async (req, res, next) => {
   const { latlng, unit } = req.params;
   const [lat, lng] = latlng.split(',');
 
+  // конвертація відстані м в миліб або в км
   const multiplier = unit === 'mi' ? 0.000621371 : 0.001;
 
   if (!lat || !lng) {
@@ -155,16 +161,26 @@ exports.getDistances = catchAsync(async (req, res, next) => {
 
   const distances = await Tour.aggregate([
     {
+      // єдиний етап конвеєра геопросторової агрегації
+      // він завжди має бути першим у черзі
+      // обов'язково має бути індекс, він у нас прописаний в tourModel
+      // якби у нас було декілька геопросторових індексів, то ми мусили би використовувати параметр key
+      //   для визначення поля, яке ми хочему обчислювати
       $geoNear: {
+        // near - точка, до якої потрібно обчислити відстані
         near: {
           type: 'Point',
+          // множимо на 1, щоб перевести їх в цифри
           coordinates: [lng * 1, lat * 1],
         },
+        // distanceField - це назва поля, яке буде створено і в якому зберігатимуться всі обчислені відстані.
         distanceField: 'distance',
+        // distanceMultiplier вказуємо на скільки ділити відстань(функція прописана зверху)
         distanceMultiplier: multiplier,
       },
     },
     {
+      // $project - видаємо назви полів, які хочему зберегти при виведенні на екран
       $project: {
         distance: 1,
         name: 1,
