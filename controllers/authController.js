@@ -78,6 +78,14 @@ exports.login = catchAsync(async (req, res, next) => {
   createSendToken(user, 200, res);
 });
 
+exports.logout = (req, res) => {
+  res.cookie('jwt', 'loggedout', {
+    expires: new Date(Date.now() + 10 * 1000),
+    httpOnly: true,
+  });
+  res.status(200).json({ status: 'success' });
+};
+
 // функція перевірки, чи авторизований користувач
 exports.protect = catchAsync(async (req, res, next) => {
   // 1) Зчитуємо токен з заголовку авторизації і перевіряємо його
@@ -87,6 +95,9 @@ exports.protect = catchAsync(async (req, res, next) => {
     req.headers.authorization.startsWith('Bearer')
   ) {
     token = req.headers.authorization.split(' ')[1];
+  } else if (req.cookies.jwt) {
+    // зчитуємо jwt з файлу cookie
+    token = req.cookies.jwt;
   }
 
   if (!token) {
@@ -127,6 +138,38 @@ exports.protect = catchAsync(async (req, res, next) => {
   req.user = currentUser;
   next();
 });
+
+// Лише для відтворених сторінок, без помилок!
+exports.isLoggedIn = async (req, res, next) => {
+  if (req.cookies.jwt) {
+    try {
+      // 1) підтверджуємо токен
+      const decoded = await promisify(jwt.verify)(
+        req.cookies.jwt,
+        process.env.JWT_SECRET,
+      );
+
+      // 2) Перевіряємо, чи все ще існує користувач
+      const currentUser = await User.findById(decoded.id);
+      if (!currentUser) {
+        return next();
+      }
+
+      // 3) Чи не змінював пористувач свій пароль
+      if (currentUser.changedPasswordAfter(decoded.iat)) {
+        return next();
+      }
+
+      // Якщо все відбулось корректно, то користувач зареєстрований
+      // робимо доступ користувачу до шаблонів
+      res.locals.user = currentUser;
+      return next();
+    } catch (err) {
+      return next();
+    }
+  }
+  next();
+};
 
 // -------ВИЗНАЧЕННЯ РОЛЕЙ КОРИСТУВАЧІВ, параметром передаємо, хто має право робити якісь дії
 exports.restrictTo = (...roles) => {

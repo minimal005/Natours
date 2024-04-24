@@ -27,9 +27,9 @@ const reviews = JSON.parse(
 // import data in DB
 const importData = async () => {
   try {
-    await Tour.create(tours);
     // відключаємо валідацію, оскільки ми не зможемо завантажити наших користувачів буз підтвердження паролів
     await User.create(users, { validateBeforeSave: false });
+    await Tour.create(tours);
     await Review.create(reviews);
     console.log('loaded');
   } catch (err) {
