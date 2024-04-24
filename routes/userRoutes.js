@@ -6,6 +6,7 @@ const router = express.Router();
 
 router.post('/signup', authController.signup);
 router.post('/login', authController.login);
+router.get('/logout', authController.logout);
 
 // якщо ти не авторизований і хочеш відновити пароль
 router.post('/forgotPassword', authController.forgotPassword);
